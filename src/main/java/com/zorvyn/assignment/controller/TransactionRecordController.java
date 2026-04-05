@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.zorvyn.assignment.dto.SummaryRequestDTO;
+import com.zorvyn.assignment.dto.SummaryResponseDTO;
 import com.zorvyn.assignment.entity.TransactionRecord;
 import com.zorvyn.assignment.service.TransactionRecordService;
 
@@ -35,12 +37,27 @@ public class TransactionRecordController {
 
     @GetMapping("/{id}")
     public TransactionRecord getById(@PathVariable Long id) {
-        return transactionRecordService.getRecordById(id);
+        return transactionRecordService.getAllRecords().stream()
+                .filter(r -> r.getId().equals(id))
+                .findFirst()
+                .orElse(null);
     }
 
     @PutMapping("/{id}")
     public TransactionRecord update(@PathVariable Long id, @RequestBody TransactionRecord record) {
         return transactionRecordService.updateRecord(id, record);
+    }
+
+    @PostMapping("/{id}/delete")
+    public boolean delete(@PathVariable Long id) {
+        return transactionRecordService.deleteRecord(id);
+    }
+
+    @PostMapping("/summary")
+    public SummaryResponseDTO getSummary(@RequestBody SummaryRequestDTO request) {
+        return transactionRecordService.getSummary(
+                request.getStartDate(),
+                request.getEndDate());
     }
 
 }
