@@ -47,10 +47,9 @@ private Category category;
      @Column(nullable = false)
     private boolean deleted = false;
 
-    public boolean isDeleted() { return deleted; }
-    public void setDeleted(boolean deleted) { this.deleted = deleted; }
-
     private String description;
+
+   
     
 
 }

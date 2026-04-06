@@ -5,29 +5,34 @@ const catColor = c => CAT_COLORS[c] || '#666';
 const dot = c => `<span style="width:7px;height:7px;background:${c};border-radius:50%;display:inline-block;margin-right:6px"></span>`;
 
 const PERM_MAP = {
-  view_records:  {admin:true, analyst:true,  viewer:true},
-  create_record: {admin:true, analyst:false, viewer:false},
-  edit_record:   {admin:true, analyst:false, viewer:false},
-  delete_record: {admin:true, analyst:false, viewer:false},
-  view_summary:  {admin:true, analyst:true,  viewer:false},
-  view_deleted:  {admin:true, analyst:false, viewer:false},
-  restore_record:{admin:true, analyst:false, viewer:false},
-  manage_users:  {admin:true, analyst:false, viewer:false},
+  view_records:        {admin:true, analyst:true,  viewer:true},
+  view_counts_recent:  {admin:true, analyst:true,  viewer:true},
+  view_period_kpis:    {admin:true, analyst:true,  viewer:true},
+  create_record:       {admin:true, analyst:false, viewer:false},
+  edit_record:         {admin:true, analyst:false, viewer:false},
+  delete_record:       {admin:true, analyst:false, viewer:false},
+  view_summary:        {admin:true, analyst:true,  viewer:false},
+  view_deleted:        {admin:true, analyst:false, viewer:false},
+  restore_record:      {admin:true, analyst:false, viewer:false},
+  manage_users:        {admin:true, analyst:false, viewer:false},
 };
 
 const PERMS = [
-  {action:'View Records — GET /api/transactions',              admin:true,  analyst:true,  viewer:true},
-  {action:'Create Record — POST /api/transactions',            admin:true,  analyst:false, viewer:false},
-  {action:'Edit Record — PUT /api/transactions/{id}',          admin:true,  analyst:false, viewer:false},
-  {action:'Delete Record — DELETE /api/transactions/{id}',     admin:true,  analyst:false, viewer:false},
-  {action:'View Summary — POST /api/transactions/summary',     admin:true,  analyst:true,  viewer:false},
-  {action:'View Deleted — GET /api/transactions/deleted',      admin:true,  analyst:false, viewer:false},
-  {action:'Restore Record — PUT /api/transactions/{id}/restore',admin:true, analyst:false, viewer:false},
-  {action:'Manage Users — /users/**',                          admin:true,  analyst:false, viewer:false},
+  {action:'View Records — GET /api/transactions and /api/transactions/{id}', admin:true, analyst:true, viewer:true},
+  {action:'View Counts/Recent — GET /api/transactions/count, /recent', admin:true, analyst:true, viewer:true},
+  {action:'View Period KPIs — GET /api/transactions/recordCount,totalIncome,totalExpense,netspend', admin:true, analyst:true, viewer:true},
+  {action:'Create Record — POST /api/transactions', admin:true, analyst:false, viewer:false},
+  {action:'Edit Record — PUT /api/transactions/{id}', admin:true, analyst:false, viewer:false},
+  {action:'Delete Record — DELETE /api/transactions/{id}', admin:true, analyst:false, viewer:false},
+  {action:'View Summary — POST /api/transactions/summary', admin:true, analyst:true, viewer:false},
+  {action:'View Deleted — GET /api/transactions/deleted', admin:true, analyst:false, viewer:false},
+  {action:'Restore Record — PUT /api/transactions/{id}/restore', admin:true, analyst:false, viewer:false},
+  {action:'Manage Users — /users/**', admin:true, analyst:false, viewer:false},
 ];
 
 let records = [], users = [], deletedRecs = [], summaryData = null;
 let recEditId = null, userEditId = null;
+let currentRole = null;
 
 // 👉 Pagination State
 let currentPage = 0;
@@ -42,6 +47,49 @@ function getToken() {
   return t;
 }
 
+function safeJwtPayload(token) {
+  try {
+    const parts = String(token).split('.');
+    if (parts.length < 2) return null;
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(atob(b64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+    return JSON.parse(json);
+  } catch (e) {
+    return null;
+  }
+}
+
+function initRoleFromToken() {
+  const token = localStorage.getItem('token');
+  const payload = token ? safeJwtPayload(token) : null;
+  currentRole = (payload?.role || null);
+}
+
+function applyRoleVisibility() {
+  // Role names are stored in JWT as "ADMIN" | "ANALYST" | "VIEWER"
+  const role = (currentRole || '').toUpperCase();
+  const allow = {
+    overview: true,
+    analytics: role === 'ADMIN' || role === 'ANALYST',
+    users: role === 'ADMIN',
+    access: role === 'ADMIN',
+    deleted: role === 'ADMIN',
+  };
+
+  document.querySelectorAll('.ni[data-section]').forEach(el => {
+    const sec = el.getAttribute('data-section');
+    el.style.display = allow[sec] ? '' : 'none';
+  });
+
+  // If current visible section is not allowed, force back to overview.
+  const active = document.querySelector('.ni.active[data-section]');
+  const activeSec = active?.getAttribute('data-section');
+  if (activeSec && !allow[activeSec]) {
+    const first = document.querySelector('.ni[data-section="overview"]');
+    if (first) nav(first, 'overview');
+  }
+}
+
 async function apiFetch(url, opts = {}) {
   const token = getToken(); if (!token) return null;
   const headers = { 'Authorization': `Bearer ${token}` };
@@ -49,14 +97,21 @@ async function apiFetch(url, opts = {}) {
   
   const res = await fetch(url, { ...opts, headers: { ...headers, ...(opts.headers||{}) } });
   
-  // 👉 Auto-logout on invalid token/restarted server
-  if (res.status === 401 || res.status === 403) { 
-    localStorage.removeItem('token'); 
-    window.location.href = 'login.html'; 
-    return null; 
+  // 👉 Auto-logout only when token is invalid/expired
+  // 403 can be a valid "role not allowed" response (e.g., Viewer calling /users).
+  if (res.status === 401) {
+    localStorage.removeItem('token');
+    window.location.href = 'login.html';
+    return null;
   }
   
   if (!res.ok) { 
+    if (res.status === 403) {
+      const txt = await res.text().catch(()=>'');
+      const msg = (txt && txt.includes('"message"')) ? (() => { try { return JSON.parse(txt).message; } catch { return null; } })() : null;
+      toast(msg || 'Access denied — you don’t have permission for this action.', 'error');
+      throw new Error('403');
+    }
     const txt = await res.text().catch(()=>''); 
     toast('Error: ' + (txt || res.status), 'error'); 
     throw new Error(txt || res.status); 
@@ -71,7 +126,7 @@ function nav(el, section) {
   el.classList.add('active');
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.getElementById('sec-' + section).classList.add('active');
-  const labels = {overview:'Records', analytics:'Analytics', users:'User Management', access:'Access Control', deleted:'Deleted Records', system:'System'};
+  const labels = {overview:'Records', analytics:'Analytics', users:'User Management', access:'Access & System', deleted:'Deleted Records'};
   document.getElementById('pg-title').textContent = labels[section] || section;
   if (section === 'deleted') loadDeleted();
 }
@@ -79,11 +134,17 @@ function nav(el, section) {
 // ── LOAD ──────────────────────────────────────────────────
 async function loadData() {
   await fetchRecordsRemote();
+  await loadRecordKpis();
 
-  try {
-    const r2 = await apiFetch('/users');
-    if (r2) users = await r2.json();
-  } catch(e) {}
+  const role = (currentRole || '').toUpperCase();
+  if (role === 'ADMIN') {
+    try {
+      const r2 = await apiFetch('/users');
+      if (r2) users = await r2.json();
+    } catch(e) {}
+  } else {
+    users = [];
+  }
   renderUsers(); renderPermMatrix(); updateSystemStats();
 
   try {
@@ -135,12 +196,13 @@ async function loadDeleted() {
 function renderRecords(list) {
   list = list || records;
   document.getElementById('records-table').innerHTML = list.length === 0
-    ? `<tr><td colspan="5" class="empty">No records found</td></tr>`
+    ? `<tr><td colspan="6" class="empty">No records found</td></tr>`
     : list.map(r => `<tr style="cursor:pointer" onclick="viewRecord(${r.id})">
         <td style="color:var(--t2)">${r.date}</td>
         <td>${dot(catColor(r.cat))}${r.cat}</td>
         <td><span class="badge ${r.type==='INCOME'?'bg':'br'}">${r.type}</span></td>
         <td style="font-weight:600;color:${r.type==='INCOME'?'var(--green)':'var(--red)'}">${fmt(r.amount)}</td>
+        <td style="color:var(--t2)">${(r.description || '').toString().slice(0, 40)}${(r.description || '').length > 40 ? '…' : ''}</td>
         <td><div class="acts">
           <button class="abt ae" onclick="event.stopPropagation(); openEditRecord(${r.id})" title="Edit"><i class="fa-solid fa-pen"></i></button>
           <button class="abt ad" onclick="event.stopPropagation(); deleteRecord(${r.id})"   title="Delete"><i class="fa-solid fa-trash"></i></button>
@@ -178,6 +240,40 @@ function changePage(p) {
 function applyFilters() {
   currentPage = 0; 
   fetchRecordsRemote();
+  loadRecordKpis();
+}
+
+async function loadRecordKpis() {
+  const periodSel = (document.getElementById('fil-period')?.value || '').trim();
+  const period = periodSel || 'MONTHLY';
+  const params = new URLSearchParams();
+  if (period) params.append('period', period);
+
+  try {
+    const [rcRes, incRes, expRes, netRes] = await Promise.all([
+      apiFetch('/api/transactions/recordCount?' + params.toString()),
+      apiFetch('/api/transactions/totalIncome?' + params.toString()),
+      apiFetch('/api/transactions/totalExpense?' + params.toString()),
+      apiFetch('/api/transactions/netspend?' + params.toString()),
+    ]);
+
+    const rc = rcRes ? await rcRes.json() : null;
+    const inc = incRes ? await incRes.json() : null;
+    const exp = expRes ? await expRes.json() : null;
+    const net = netRes ? await netRes.json() : null;
+
+    const setText = (id, txt) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = txt;
+    };
+
+    setText('kpi-rec-count', rc?.value ?? '—');
+    setText('kpi-total-income', fmt(inc?.value ?? 0));
+    setText('kpi-total-expense', fmt(exp?.value ?? 0));
+    setText('kpi-netspend', fmt(net?.value ?? 0));
+  } catch (e) {
+    // Keep UI non-blocking; viewer/admin already see other parts.
+  }
 }
 
 async function fetchRecordsRemote() {
@@ -234,6 +330,7 @@ async function viewRecord(id) {
       document.getElementById('vm-date').textContent = r.date;
       document.getElementById('vm-type').innerHTML = `<span class="badge ${r.type==='INCOME'?'bg':'br'}">${r.type}</span>`;
       document.getElementById('vm-cat').innerHTML = `${dot(catColor(r.category))}${r.category}`;
+      document.getElementById('vm-desc').textContent = (r.description && String(r.description).trim()) ? r.description : '—';
       openModal('view-modal');
     }
   } catch(e) {}
@@ -244,6 +341,7 @@ function openRecordModal() {
   document.getElementById('rec-modal-title').textContent = 'Add Financial Record';
   document.getElementById('rm-amount').value = '';
   document.getElementById('rm-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('rm-desc').value = '';
   openModal('rec-modal');
 }
 function openEditRecord(id) {
@@ -254,6 +352,7 @@ function openEditRecord(id) {
   document.getElementById('rm-date').value   = r.date;
   document.getElementById('rm-type').value   = r.type;
   document.getElementById('rm-cat').value    = r.cat;
+  document.getElementById('rm-desc').value   = r.description || '';
   openModal('rec-modal');
 }
 async function saveRecord() {
@@ -261,9 +360,11 @@ async function saveRecord() {
   const date   = document.getElementById('rm-date').value;
   const type   = document.getElementById('rm-type').value;
   const cat    = document.getElementById('rm-cat').value;
+  const description = (document.getElementById('rm-desc').value || '').trim();
   if (!amount || amount <= 0) return toast('Amount must be positive', 'error');
   if (!date) return toast('Date is required', 'error');
-  const body = JSON.stringify({ amount, date, type, category: cat, deleted: false });
+  if (!description) return toast('Description is required', 'error');
+  const body = JSON.stringify({ amount, date, type, category: cat, description, deleted: false });
   try {
     if (recEditId) { await apiFetch('/api/transactions/' + recEditId, { method:'PUT', body }); toast('Record updated', 'success'); }
     else           { await apiFetch('/api/transactions',              { method:'POST', body }); toast('Record created', 'success'); }
@@ -375,11 +476,41 @@ async function saveUser() {
   const active = document.getElementById('um-status').value === 'true';
   if (!name)  return toast('Name is required', 'error');
   if (!email || !email.includes('@')) return toast('Valid email required', 'error');
-  const body = JSON.stringify({ name, email, role:{name:role}, password:'defaultPassword1', isActive: active });
   try {
-    if (userEditId) { await apiFetch('/users/'+userEditId, {method:'PUT', body}); toast('User updated','success'); }
-    else            { await apiFetch('/users',             {method:'POST',body}); toast('User added','success'); }
-    closeModal('user-modal'); await loadData();
+    if (userEditId) {
+      // PUT /users/{id} expects a full User-ish payload (role as object, plus isActive)
+      const body = JSON.stringify({ name, email, role: { name: role }, password: 'defaultPassword1', isActive: active });
+      await apiFetch('/users/' + userEditId, { method: 'PUT', body });
+      toast('User updated', 'success');
+      closeModal('user-modal');
+      await loadData();
+      return;
+    }
+
+    // POST /users expects CreateUserRequestDTO (role as string)
+    const createBody = JSON.stringify({ name, email, role, password: 'defaultPassword1' });
+    const res = await apiFetch('/users', { method: 'POST', body: createBody });
+    const created = res ? await res.json().catch(() => null) : null;
+
+    // Show temp password if backend returns it
+    if (created?.temporaryPassword) {
+      toast(`User created. Temp password: ${created.temporaryPassword}`, 'success');
+    } else {
+      toast('User added', 'success');
+    }
+
+    closeModal('user-modal');
+
+    // Backend createUser() always sets active=true; if UI requested inactive, flip it after creation.
+    await loadData();
+    if (!active) {
+      const newUser = users.find(u => (u.email || '').toLowerCase() === email.toLowerCase());
+      if (newUser?.id) {
+        await apiFetch(`/users/${newUser.id}/status?active=false`, { method: 'PUT' });
+        await loadData();
+        toast('User set to inactive', 'info');
+      }
+    }
   } catch(e) {}
 }
 async function toggleUser(id) {
@@ -396,12 +527,13 @@ async function deleteUser(id) {
 // ── RENDER: DELETED ───────────────────────────────────────
 function renderDeleted() {
   document.getElementById('deleted-table').innerHTML = deletedRecs.length === 0
-    ? `<tr><td colspan="5" class="empty">No soft-deleted records</td></tr>`
+    ? `<tr><td colspan="6" class="empty">No soft-deleted records</td></tr>`
     : deletedRecs.map(r => `<tr>
         <td style="color:var(--t2)">${r.date}</td>
         <td>${dot(catColor(r.category))}${r.category}</td>
         <td><span class="badge ${r.type==='INCOME'?'bg':'br'}">${r.type}</span></td>
         <td style="font-weight:600">${fmt(r.amount)}</td>
+        <td style="color:var(--t2)">${(r.description || '').toString().slice(0, 40)}${(r.description || '').length > 40 ? '…' : ''}</td>
         <td><button class="abt at" onclick="restoreRecord(${r.id})" title="Restore"><i class="fa-solid fa-rotate-left"></i></button></td>
       </tr>`).join('');
   document.getElementById('del-count').textContent = `${deletedRecs.length} deleted records`;
@@ -462,5 +594,9 @@ function confirmLogout() {
 }
 
 // ── INIT ──────────────────────────────────────────────────
+initRoleFromToken();
+applyRoleVisibility();
 loadData();
-loadSummary();
+if (['ADMIN', 'ANALYST'].includes((currentRole || '').toUpperCase())) {
+  loadSummary();
+}

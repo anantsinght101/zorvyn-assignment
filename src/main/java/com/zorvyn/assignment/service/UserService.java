@@ -108,12 +108,12 @@ public class UserService {
     
     }
 
-    public User signup(User user) {
+   public User signup(User user, String roleName) {
         if (userRepository.findByEmail(user.getEmail()).isPresent()) {
             throw new DuplicateResourceException("Email already exists");
         }
 
-        String roleName = user.getRole().getName();
+       
         Role role = roleRepository.findByName(roleName)
                 .orElseThrow(() -> new ResourceNotFoundException("Role not found"));
 

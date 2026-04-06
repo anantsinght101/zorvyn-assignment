@@ -17,16 +17,15 @@
   </div>
   <nav class="nav-body">
     <div class="sec-label">Viewer</div>
-    <div class="ni active" onclick="nav(this,'overview')"><i class="fa-solid fa-table-list"></i><span class="nav-label">Records</span></div>
+    <div class="ni active" data-section="overview" onclick="nav(this,'overview')"><i class="fa-solid fa-table-list"></i><span class="nav-label">Records</span></div>
 
     <div class="sec-label">Analyst</div>
-    <div class="ni" onclick="nav(this,'analytics')"><i class="fa-solid fa-chart-pie"></i><span class="nav-label">Analytics</span></div>
+    <div class="ni" data-section="analytics" onclick="nav(this,'analytics')"><i class="fa-solid fa-chart-pie"></i><span class="nav-label">Analytics</span></div>
 
     <div class="sec-label">Admin</div>
-    <div class="ni" onclick="nav(this,'users')"><i class="fa-solid fa-users"></i><span class="nav-label">Users</span><span class="npill" id="user-pill">—</span></div>
-    <div class="ni" onclick="nav(this,'access')"><i class="fa-solid fa-shield-halved"></i><span class="nav-label">Access Control</span></div>
-    <div class="ni" onclick="nav(this,'deleted')"><i class="fa-solid fa-trash-can"></i><span class="nav-label">Deleted Records</span></div>
-    <div class="ni" onclick="nav(this,'system')"><i class="fa-solid fa-server"></i><span class="nav-label">System</span></div>
+    <div class="ni" data-section="users" onclick="nav(this,'users')"><i class="fa-solid fa-users"></i><span class="nav-label">Users</span><span class="npill" id="user-pill">—</span></div>
+    <div class="ni" data-section="access" onclick="nav(this,'access')"><i class="fa-solid fa-shield-halved"></i><span class="nav-label">Access &amp; System</span></div>
+    <div class="ni" data-section="deleted" onclick="nav(this,'deleted')"><i class="fa-solid fa-trash-can"></i><span class="nav-label">Deleted Records</span></div>
   </nav>
   <div class="sidebar-foot">
     <div class="urow">
@@ -60,6 +59,25 @@
         <div class="scard" style="padding: 10px 14px;"><div class="sicon" style="background:var(--s3);color:var(--text)"><i class="fa-solid fa-list-ol"></i></div><div class="sbody"><div class="slabel">Total Records</div><div class="sval" id="ov-count-total" style="font-size:18px">—</div></div></div>
         <div class="scard" style="padding: 10px 14px;"><div class="sicon" style="background:var(--gdim);color:var(--green)"><i class="fa-solid fa-arrow-trend-up"></i></div><div class="sbody"><div class="slabel">Income</div><div class="sval" id="ov-count-income" style="font-size:18px">—</div></div></div>
         <div class="scard" style="padding: 10px 14px;"><div class="sicon" style="background:var(--rdim);color:var(--red)"><i class="fa-solid fa-arrow-trend-down"></i></div><div class="sbody"><div class="slabel">Expense</div><div class="sval" id="ov-count-expense" style="font-size:18px">—</div></div></div>
+      </div>
+
+      <div class="g4" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 14px;">
+        <div class="scard" style="padding: 10px 14px;">
+          <div class="sicon" style="background:var(--s3);color:var(--text)"><i class="fa-solid fa-hashtag"></i></div>
+          <div class="sbody"><div class="slabel">Records (selected period)</div><div class="sval" id="kpi-rec-count" style="font-size:18px">—</div></div>
+        </div>
+        <div class="scard" style="padding: 10px 14px;">
+          <div class="sicon" style="background:var(--gdim);color:var(--green)"><i class="fa-solid fa-arrow-trend-up"></i></div>
+          <div class="sbody"><div class="slabel">Total Income</div><div class="sval" id="kpi-total-income" style="font-size:18px">—</div></div>
+        </div>
+        <div class="scard" style="padding: 10px 14px;">
+          <div class="sicon" style="background:var(--rdim);color:var(--red)"><i class="fa-solid fa-arrow-trend-down"></i></div>
+          <div class="sbody"><div class="slabel">Total Expense</div><div class="sval" id="kpi-total-expense" style="font-size:18px">—</div></div>
+        </div>
+        <div class="scard" style="padding: 10px 14px;">
+          <div class="sicon" style="background:var(--bdim);color:var(--blue)"><i class="fa-solid fa-scale-balanced"></i></div>
+          <div class="sbody"><div class="slabel">Net Spend</div><div class="sval" id="kpi-netspend" style="font-size:18px">—</div></div>
+        </div>
       </div>
 
       <div style="display:flex; gap: 14px; margin-bottom: 20px;">
@@ -102,7 +120,7 @@
           <div class="card" style="padding:0;overflow:hidden">
             <div class="tbl-wrap">
               <table>
-                <thead><tr><th>Date</th><th>Category</th><th>Type</th><th>Amount</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Date</th><th>Category</th><th>Type</th><th>Amount</th><th>Description</th><th>Actions</th></tr></thead>
                 <tbody id="records-table"></tbody>
               </table>
             </div>
@@ -186,7 +204,7 @@
 
     <div class="section" id="sec-access">
       <div class="sechd">
-        <div><h2>Access Control</h2><div class="sechd-sub">RBAC matrix enforced via @PreAuthorize on every endpoint</div></div>
+        <div><h2>Access Control &amp; System</h2><div class="sechd-sub">RBAC matrix and live system stats from existing backend endpoints</div></div>
         <button class="btn btn-g btn-sm" onclick="openModal('perm-modal')"><i class="fa-solid fa-flask"></i> Test Permission</button>
       </div>
       <div class="card" style="margin-bottom:14px">
@@ -198,6 +216,12 @@
           </table>
         </div>
       </div>
+      <div class="sysg">
+        <div class="sysbox"><div class="sl">Total Users</div><div class="sv" id="ss-users">—</div><div class="ss">from GET /users</div></div>
+        <div class="sysbox"><div class="sl">Active Records</div><div class="sv" id="ss-records">—</div><div class="ss">from GET /api/transactions</div></div>
+        <div class="sysbox"><div class="sl">Soft-Deleted</div><div class="sv" id="ss-deleted">—</div><div class="ss">from GET /api/transactions/deleted</div></div>
+        <div class="sysbox"><div class="sl">Categories</div><div class="sv">5</div><div class="ss">FOOD, TRANSPORT, UTILITIES, ENTERTAINMENT, OTHER</div></div>
+      </div>
     </div>
 
     <div class="section" id="sec-deleted">
@@ -207,32 +231,11 @@
       <div class="card" style="padding:0;overflow:hidden">
         <div class="tbl-wrap">
           <table>
-            <thead><tr><th>Date</th><th>Category</th><th>Type</th><th>Amount</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Date</th><th>Category</th><th>Type</th><th>Amount</th><th>Description</th><th>Actions</th></tr></thead>
             <tbody id="deleted-table"></tbody>
           </table>
         </div>
         <div class="tfoot"><span id="del-count">—</span></div>
-      </div>
-    </div>
-
-    <div class="section" id="sec-system">
-      <div class="sechd">
-        <div><h2>System</h2><div class="sechd-sub">DB record counts and validation error log</div></div>
-      </div>
-      <div class="sysg">
-        <div class="sysbox"><div class="sl">Total Users</div><div class="sv" id="ss-users">—</div><div class="ss">from GET /users</div></div>
-        <div class="sysbox"><div class="sl">Active Records</div><div class="sv" id="ss-records">—</div><div class="ss">from GET /api/transactions</div></div>
-        <div class="sysbox"><div class="sl">Soft-Deleted</div><div class="sv" id="ss-deleted">—</div><div class="ss">from GET /api/transactions/deleted</div></div>
-        <div class="sysbox"><div class="sl">Categories</div><div class="sv">5</div><div class="ss">FOOD, TRANSPORT, UTILITIES, ENTERTAINMENT, OTHER</div></div>
-      </div>
-      <div class="card">
-        <div class="card-hd"><div><div class="card-title">Validation Error Log</div><div class="card-sub">Caught by GlobalExceptionHandler — MethodArgumentNotValidException</div></div></div>
-        <div class="tbl-wrap">
-          <table>
-            <thead><tr><th>Endpoint</th><th>Field</th><th>Error</th><th>Time</th></tr></thead>
-            <tbody id="val-errors"><tr><td colspan="4" class="empty">No validation errors logged</td></tr></tbody>
-          </table>
-        </div>
       </div>
     </div>
 
@@ -249,6 +252,10 @@
     <div class="twofc">
       <div class="fg"><label class="fl">Type</label><div class="fc" id="vm-type" style="background:var(--bg); border:none; height:34px; padding-top:10px"></div></div>
       <div class="fg"><label class="fl">Category</label><div class="fc" id="vm-cat" style="background:var(--bg); border:none; height:34px; padding-top:10px"></div></div>
+    </div>
+    <div class="fg" style="margin-top:12px">
+      <label class="fl">Description</label>
+      <div class="fc" id="vm-desc" style="background:var(--bg); border:none; min-height:34px; padding-top:10px; white-space:pre-wrap"></div>
     </div>
     <div class="mfoot">
       <button class="btn btn-g" onclick="closeModal('view-modal')">Close</button>
@@ -269,6 +276,10 @@
         <option value="FOOD">Food</option><option value="TRANSPORT">Transport</option>
         <option value="UTILITIES">Utilities</option><option value="ENTERTAINMENT">Entertainment</option><option value="OTHER">Other</option>
       </select></div>
+    </div>
+    <div class="fg">
+      <label class="fl">Description</label>
+      <input class="fc" id="rm-desc" type="text" placeholder="e.g., Lunch with team"/>
     </div>
     <div class="mfoot">
       <button class="btn btn-g" onclick="closeModal('rec-modal')">Cancel</button>
@@ -301,6 +312,8 @@
     <div class="fg"><label class="fl">Action</label>
       <select class="fc" id="pt-action">
         <option value="view_records">View Records (GET /api/transactions)</option>
+        <option value="view_counts_recent">View Counts/Recent (GET /api/transactions/count, /recent)</option>
+        <option value="view_period_kpis">View Period KPIs (GET /api/transactions/recordCount,totalIncome,totalExpense,netspend)</option>
         <option value="create_record">Create Record (POST /api/transactions)</option>
         <option value="edit_record">Edit Record (PUT /api/transactions/{id})</option>
         <option value="delete_record">Delete Record (DELETE /api/transactions/{id})</option>

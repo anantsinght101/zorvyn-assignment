@@ -54,6 +54,7 @@ public class TransactionRecordService {
         existing.setDate(updatedRecord.getDate());
         existing.setType(updatedRecord.getType());
         existing.setCategory(updatedRecord.getCategory());
+        existing.setDescription(updatedRecord.getDescription());
 
         return transactionRecordRepository.save(existing);
     }
