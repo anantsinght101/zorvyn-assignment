@@ -1,4 +1,4 @@
-# 💰 Zorvyn Finance: Data Processing & RBAC Backend
+#Finance: Data Processing & RBAC Backend
 
 A robust Spring Boot backend system for managing financial records with integrated **JWT Authentication**, **Role-Based Access Control (RBAC)**, and a dashboard-ready **Analytics API**.
 
